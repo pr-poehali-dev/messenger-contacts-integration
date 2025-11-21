@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "name": "Get user contacts",
+      "method": "GET",
+      "path": "/?user_id=1&type=contacts",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "contacts": []
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

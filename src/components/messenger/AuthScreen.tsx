@@ -1,17 +1,85 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
+import { useToast } from '@/hooks/use-toast';
 
 interface AuthScreenProps {
-  showRegister: boolean;
-  setShowRegister: (value: boolean) => void;
-  handleLogin: (e: React.FormEvent) => void;
-  handleRegister: (e: React.FormEvent) => void;
+  onAuthSuccess: (user: any, token: string) => void;
 }
 
-export default function AuthScreen({ showRegister, setShowRegister, handleLogin, handleRegister }: AuthScreenProps) {
+export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
+  const [showRegister, setShowRegister] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const formData = new FormData(e.target as HTMLFormElement);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+
+    try {
+      const response = await fetch('https://functions.poehali.dev/126aea00-0c86-4b38-a5f2-38c925ddb8cc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'login', email, password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        onAuthSuccess(data.user, data.token);
+        toast({ title: 'Успешно!', description: 'Добро пожаловать!' });
+      } else {
+        toast({ title: 'Ошибка', description: data.error || 'Неверные данные', variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Ошибка', description: 'Не удалось подключиться к серверу', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const formData = new FormData(e.target as HTMLFormElement);
+    const email = formData.get('email') as string;
+    const username = formData.get('username') as string;
+    const password = formData.get('password') as string;
+
+    try {
+      const response = await fetch('https://functions.poehali.dev/126aea00-0c86-4b38-a5f2-38c925ddb8cc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'register', email, username, password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        onAuthSuccess(data.user, data.token);
+        toast({ title: 'Успешно!', description: 'Аккаунт создан!' });
+      } else {
+        toast({ title: 'Ошибка', description: data.error || 'Не удалось создать аккаунт', variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Ошибка', description: 'Не удалось подключиться к серверу', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/20 via-background to-secondary/20 flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-8 space-y-6 animate-fade-in">
@@ -31,18 +99,18 @@ export default function AuthScreen({ showRegister, setShowRegister, handleLogin,
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="reg-username">Имя пользователя</Label>
-              <Input id="reg-username" type="text" placeholder="Введите имя" required />
+              <Input name="username" id="reg-username" type="text" placeholder="Введите имя" required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="reg-email">Email</Label>
-              <Input id="reg-email" type="email" placeholder="your@email.com" required />
+              <Input name="email" id="reg-email" type="email" placeholder="your@email.com" required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="reg-password">Пароль</Label>
-              <Input id="reg-password" type="password" placeholder="••••••••" required />
+              <Input name="password" id="reg-password" type="password" placeholder="••••••••" required />
             </div>
-            <Button type="submit" className="w-full" size="lg">
-              Зарегистрироваться
+            <Button type="submit" className="w-full" size="lg" disabled={loading}>
+              {loading ? 'Загрузка...' : 'Зарегистрироваться'}
             </Button>
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -71,14 +139,14 @@ export default function AuthScreen({ showRegister, setShowRegister, handleLogin,
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="your@email.com" required />
+              <Input name="email" id="email" type="email" placeholder="your@email.com" required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Пароль</Label>
-              <Input id="password" type="password" placeholder="••••••••" required />
+              <Input name="password" id="password" type="password" placeholder="••••••••" required />
             </div>
-            <Button type="submit" className="w-full" size="lg">
-              Войти
+            <Button type="submit" className="w-full" size="lg" disabled={loading}>
+              {loading ? 'Загрузка...' : 'Войти'}
             </Button>
             <div className="relative">
               <div className="absolute inset-0 flex items-center">

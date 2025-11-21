@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Icon from '@/components/ui/icon';
+import VideoCall from './VideoCall';
 
 interface Chat {
   id: number;
@@ -38,6 +40,9 @@ export default function ChatWindow({
   setMessageInput,
   handleSendMessage
 }: ChatWindowProps) {
+  const [isCallOpen, setIsCallOpen] = useState(false);
+  const [isVideoCall, setIsVideoCall] = useState(false);
+
   if (!selectedChat) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -51,6 +56,16 @@ export default function ChatWindow({
   }
 
   const currentChat = chats.find(c => c.id === selectedChat);
+
+  const startAudioCall = () => {
+    setIsVideoCall(false);
+    setIsCallOpen(true);
+  };
+
+  const startVideoCall = () => {
+    setIsVideoCall(true);
+    setIsCallOpen(true);
+  };
 
   return (
     <div className="flex-1 flex flex-col">
@@ -69,10 +84,10 @@ export default function ChatWindow({
           </div>
         </div>
         <div className="flex space-x-2">
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" onClick={startAudioCall}>
             <Icon name="Phone" size={20} />
           </Button>
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" onClick={startVideoCall}>
             <Icon name="Video" size={20} />
           </Button>
           <Button variant="ghost" size="icon">
@@ -135,6 +150,13 @@ export default function ChatWindow({
           </Button>
         </div>
       </div>
+
+      <VideoCall
+        isOpen={isCallOpen}
+        onClose={() => setIsCallOpen(false)}
+        contactName={currentChat?.name || 'Пользователь'}
+        isVideoCall={isVideoCall}
+      />
     </div>
   );
 }

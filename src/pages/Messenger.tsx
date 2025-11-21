@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AuthScreen from '@/components/messenger/AuthScreen';
 import Sidebar from '@/components/messenger/Sidebar';
 import ChatList from '@/components/messenger/ChatList';
 import ChatWindow from '@/components/messenger/ChatWindow';
+import { useToast } from '@/hooks/use-toast';
 
 interface User {
   id: number;
   username: string;
   avatar_url?: string;
   status: string;
+  email?: string;
 }
 
 interface Chat {
@@ -26,6 +28,7 @@ interface Message {
   content: string;
   timestamp: string;
   isOwn: boolean;
+  sender_id?: number;
 }
 
 interface Contact {
@@ -44,72 +47,135 @@ interface FriendRequest {
 
 export default function Messenger() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [showRegister, setShowRegister] = useState(false);
-  const [selectedChat, setSelectedChat] = useState<number | null>(1);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [selectedChat, setSelectedChat] = useState<number | null>(null);
   const [messageInput, setMessageInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-
-  const [currentUser] = useState<User>({
-    id: 1,
-    username: 'Иван Петров',
-    avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ivan',
-    status: 'online'
-  });
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const { toast } = useToast();
 
   const [chats] = useState<Chat[]>([
-    { id: 1, name: 'Анна Смирнова', lastMessage: 'Привет! Как дела?', timestamp: '14:32', unread: 2, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Anna' },
-    { id: 2, name: 'Петр Иванов', lastMessage: 'Встретимся завтра?', timestamp: '12:15', unread: 0, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Petr' },
-    { id: 3, name: 'Дизайн Команда', lastMessage: 'Отправил новый макет', timestamp: 'Вчера', unread: 5, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Design' },
+    { id: 1, name: 'Общий чат', lastMessage: 'Начните общение', timestamp: 'Сейчас', unread: 0, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Chat1' },
   ]);
 
-  const [messages] = useState<Message[]>([
-    { id: 1, sender: 'Анна Смирнова', content: 'Привет! Как дела?', timestamp: '14:30', isOwn: false },
-    { id: 2, sender: 'Вы', content: 'Отлично! А у тебя?', timestamp: '14:31', isOwn: true },
-    { id: 3, sender: 'Анна Смирнова', content: 'Тоже хорошо! Хочу обсудить новый проект', timestamp: '14:32', isOwn: false },
-  ]);
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    const savedUser = localStorage.getItem('user');
+    
+    if (token && savedUser) {
+      const user = JSON.parse(savedUser);
+      setCurrentUser(user);
+      setIsLoggedIn(true);
+      loadUserData(user.id);
+    }
+  }, []);
 
-  const [contacts] = useState<Contact[]>([
-    { id: 1, username: 'Анна Смирнова', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Anna', status: 'online' },
-    { id: 2, username: 'Петр Иванов', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Petr', status: 'offline' },
-    { id: 3, username: 'Мария Козлова', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Maria', status: 'online' },
-  ]);
+  const loadUserData = async (userId: number) => {
+    try {
+      const [contactsRes, requestsRes] = await Promise.all([
+        fetch(`https://functions.poehali.dev/29f4ef98-c794-48fb-b8f0-0c8b21d9cfff?user_id=${userId}&type=contacts`),
+        fetch(`https://functions.poehali.dev/29f4ef98-c794-48fb-b8f0-0c8b21d9cfff?user_id=${userId}&type=requests`)
+      ]);
 
-  const [friendRequests] = useState<FriendRequest[]>([
-    { id: 1, username: 'Алексей Волков', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alexey', timestamp: '2 часа назад' },
-    { id: 2, username: 'Ольга Новикова', avatar_url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Olga', timestamp: '5 часов назад' },
-  ]);
+      if (contactsRes.ok) {
+        const contactsData = await contactsRes.json();
+        setContacts(contactsData.contacts || []);
+      }
 
-  const handleSendMessage = () => {
-    if (messageInput.trim()) {
-      console.log('Отправка сообщения:', messageInput);
-      setMessageInput('');
+      if (requestsRes.ok) {
+        const requestsData = await requestsRes.json();
+        setFriendRequests(requestsData.requests || []);
+      }
+    } catch (error) {
+      console.error('Failed to load user data:', error);
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoggedIn(true);
+  const loadMessages = async (chatId: number) => {
+    try {
+      const response = await fetch(`https://functions.poehali.dev/0526b83c-ef03-47e1-be22-12a0fa092318?chat_id=${chatId}`);
+      if (response.ok) {
+        const data = await response.json();
+        const formattedMessages = data.messages.map((msg: any) => ({
+          id: msg.id,
+          sender: msg.sender,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          isOwn: msg.sender_id === currentUser?.id,
+          sender_id: msg.sender_id
+        }));
+        setMessages(formattedMessages);
+      }
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoggedIn(true);
+  useEffect(() => {
+    if (selectedChat && isLoggedIn) {
+      loadMessages(selectedChat);
+    }
+  }, [selectedChat, isLoggedIn]);
+
+  const handleSendMessage = async () => {
+    if (!messageInput.trim() || !currentUser || !selectedChat) return;
+
+    try {
+      const response = await fetch('https://functions.poehali.dev/0526b83c-ef03-47e1-be22-12a0fa092318', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: selectedChat,
+          sender_id: currentUser.id,
+          content: messageInput
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newMessage: Message = {
+          id: data.message_id,
+          sender: currentUser.username,
+          content: messageInput,
+          timestamp: data.timestamp,
+          isOwn: true,
+          sender_id: currentUser.id
+        };
+        setMessages([...messages, newMessage]);
+        setMessageInput('');
+      } else {
+        toast({ title: 'Ошибка', description: 'Не удалось отправить сообщение', variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Ошибка', description: 'Не удалось подключиться к серверу', variant: 'destructive' });
+    }
   };
 
-  if (!isLoggedIn) {
-    return (
-      <AuthScreen
-        showRegister={showRegister}
-        setShowRegister={setShowRegister}
-        handleLogin={handleLogin}
-        handleRegister={handleRegister}
-      />
-    );
+  const handleAuthSuccess = (user: User, token: string) => {
+    setCurrentUser(user);
+    setIsLoggedIn(true);
+    loadUserData(user.id);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+    setMessages([]);
+    setContacts([]);
+    setFriendRequests([]);
+  };
+
+  if (!isLoggedIn || !currentUser) {
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
   }
 
   return (
     <div className="h-screen flex bg-background dark">
-      <Sidebar currentUser={currentUser} setIsLoggedIn={setIsLoggedIn} />
+      <Sidebar currentUser={currentUser} setIsLoggedIn={handleLogout} />
       <ChatList
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
